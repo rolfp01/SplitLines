@@ -30,6 +30,7 @@ from .resources import *
 # Import the code for the dialog
 from .SplitLines_dialog import SplitLinesDialog
 import os.path
+import qgis.core
 
 
 class SplitLines:
@@ -188,6 +189,11 @@ class SplitLines:
         if self.first_start == True:
             self.first_start = False
             self.dlg = SplitLinesDialog()
+        
+        self.dlg.selectLines.setShowCrs(True)
+        self.dlg.selectLines.setFilters(qgis.core.QgsMapLayerProxyModel.LineLayer)
+        self.dlg.selectPoints.setShowCrs(True)
+        self.dlg.selectPoints.setFilters(qgis.core.QgsMapLayerProxyModel.PointLayer)
 
         # show the dialog
         self.dlg.show()
