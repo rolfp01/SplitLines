@@ -181,6 +181,9 @@ class SplitLines:
             self.iface.removeToolBarIcon(action)
 
 
+    def sliderChange(self):
+        self.dlg.selectedDistance.display(self.dlg.DistanceSelect.value())
+
     def run(self):
         """Run method that performs all the real work"""
 
@@ -194,6 +197,7 @@ class SplitLines:
         self.dlg.selectLines.setFilters(qgis.core.QgsMapLayerProxyModel.LineLayer)
         self.dlg.selectPoints.setShowCrs(True)
         self.dlg.selectPoints.setFilters(qgis.core.QgsMapLayerProxyModel.PointLayer)
+        self.dlg.DistanceSelect.valueChanged.connect(self.sliderChange) 
 
         # show the dialog
         self.dlg.show()
