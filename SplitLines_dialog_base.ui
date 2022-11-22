@@ -75,26 +75,6 @@
     <string>Punktdatei auswählen:</string>
    </property>
   </widget>
-  <widget class="QComboBox" name="LinienAttribut">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>110</y>
-     <width>231</width>
-     <height>22</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="PunktAttribut">
-   <property name="geometry">
-    <rect>
-     <x>260</x>
-     <y>110</y>
-     <width>231</width>
-     <height>22</height>
-    </rect>
-   </property>
-  </widget>
   <widget class="QLabel" name="label_3">
    <property name="geometry">
     <rect>
@@ -119,26 +99,6 @@
    </property>
    <property name="text">
     <string>Punkt-Join-Attribut auswählen:</string>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="attributToPoint">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>270</y>
-     <width>231</width>
-     <height>22</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="attributFromPoint">
-   <property name="geometry">
-    <rect>
-     <x>260</x>
-     <y>270</y>
-     <width>231</width>
-     <height>22</height>
-    </rect>
    </property>
   </widget>
   <widget class="QSlider" name="DistanceSelect">
@@ -232,8 +192,53 @@
     <number>1</number>
    </property>
   </widget>
+  <widget class="QgsFieldComboBox" name="LineAttribut">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>110</y>
+     <width>231</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QgsFieldComboBox" name="PointAttribut">
+   <property name="geometry">
+    <rect>
+     <x>260</x>
+     <y>110</y>
+     <width>231</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QgsFieldComboBox" name="attributToPoint">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>270</y>
+     <width>231</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QgsFieldComboBox" name="attributFromPoint">
+   <property name="geometry">
+    <rect>
+     <x>260</x>
+     <y>270</y>
+     <width>231</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>QgsFieldComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsfieldcombobox.h</header>
+  </customwidget>
   <customwidget>
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>

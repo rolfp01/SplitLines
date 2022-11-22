@@ -197,6 +197,10 @@ class SplitLines:
         self.dlg.selectLines.setFilters(qgis.core.QgsMapLayerProxyModel.LineLayer)
         self.dlg.selectPoints.setShowCrs(True)
         self.dlg.selectPoints.setFilters(qgis.core.QgsMapLayerProxyModel.PointLayer)
+        self.dlg.PointAttribut.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.LineAttribut.setLayer(self.dlg.selectLines.currentLayer())
+        self.dlg.attributFromPoint.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.attributToPoint.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.DistanceSelect.valueChanged.connect(self.sliderChange) 
 
         # show the dialog
