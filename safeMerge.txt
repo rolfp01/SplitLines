@@ -1,0 +1,70 @@
+### concatenate lines with same attributes
+            layer = self.dlg.selectLines.currentLayer()
+            crs = self.dlg.selectLines.currentLayer().crs().toWkt()
+            
+            ### add id to lines
+            fields = []
+            fields.append(QgsField('ID', QVariant.Double))
+            layer.dataProvider().addAttributes(fields)
+            layer.updateFields()
+            i = 0
+            with edit(layer):  
+                for feature in layer.getFeatures():
+                    feature.setAttribute(feature.fieldNameIndex('ID'), i)
+                    i += 1
+                    
+            ### Create the merged lines layer
+            outLayer = QgsVectorLayer('Linestring?crs='+ crs, 'snapped' , 'memory')
+            prov = outLayer.dataProvider()
+            fields = layer.fields()
+            prov.addAttributes(fields)
+            outLayer.updateFields()
+
+            already_processed = []
+            for lineFeat in layer.getFeatures():
+                attrs = lineFeat.attributes()
+                geom = lineFeat.geometry()
+                curr_id = lineFeat["ID"]
+                if curr_id not in already_processed:
+                    query = '"ID" = %s' % (curr_id)
+                    selection = layer.getFeatures(QgsFeatureRequest().setFilterExpression(query))
+                    selected_ids = [k.geometry().asPolyline() for k in selection]
+                    ### for finding adjacent features
+                    outlist = []
+                    outinds = []
+                    outset = set()
+                    for j, l in enumerate(selected_ids):
+                        as_set = set(l)
+                        inds = []
+                        for k in outset.copy():
+                            if outlist[k] & as_set:
+                                outset.remove(k)
+                                as_set |= outlist[k]
+                                inds.extend(outinds[k])
+                        outset.add(j)
+                        outlist.append(as_set)
+                        outinds.append(inds + [j])
+                    outinds = [outinds[j] for j in outset]
+                    del outset, outlist
+                    adjacent_feats = [[selected_ids[j] for j in k] for k in outinds]
+                    
+                    for f in adjacent_feats:
+                        first = True
+                        for x in xrange(0, len(f)):
+                            geom = (QgsGeometry.fromPolyline([QgsPoint(w) for w in f[x]]))
+                            if first:
+                                outFeat = QgsFeature()
+                                outFeat.setGeometry(geom)
+                                outGeom = outFeat.geometry()
+                                first = False
+                            else:
+                                outGeom = outGeom.combine(geom)
+                        outFeat.setAttributes(attrs)
+                        outFeat.setGeometry(outGeom)
+                        prov.addFeatures([outFeat])
+                    already_processed.append(curr_id)
+                else:
+                    continue
+
+            ### Add the merge lines layer to the Layers panel
+            QgsProject.instance().addMapLayer(outLayer)

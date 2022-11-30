@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
@@ -30,7 +30,13 @@ from .resources import *
 # Import the code for the dialog
 from .SplitLines_dialog import SplitLinesDialog
 import os.path
-import qgis.core
+from qgis.core import *
+import collections
+import math
+import processing
+# from qgis.core import QgsVectorLayer, QgsVectorFileWriter, QgsFeature, QgsGeometry, QgsProject, QgsField
+import shapely.ops
+from shapely.geometry import LineString
 
 
 class SplitLines:
@@ -183,7 +189,15 @@ class SplitLines:
 
     def sliderChange(self):
         self.dlg.selectedDistance.display(self.dlg.DistanceSelect.value())
+    
+    def pointLayerChange(self):
+        self.dlg.PointAttribut.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.attributFromPoint.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.attributToPoint.setLayer(self.dlg.selectPoints.currentLayer())
 
+    def lineLayerChange(self):
+        self.dlg.LineAttribut.setLayer(self.dlg.selectLines.currentLayer())
+     
     def run(self):
         """Run method that performs all the real work"""
 
@@ -194,13 +208,17 @@ class SplitLines:
             self.dlg = SplitLinesDialog()
         
         self.dlg.selectLines.setShowCrs(True)
-        self.dlg.selectLines.setFilters(qgis.core.QgsMapLayerProxyModel.LineLayer)
+        self.dlg.selectLines.setFilters(QgsMapLayerProxyModel.LineLayer)
         self.dlg.selectPoints.setShowCrs(True)
-        self.dlg.selectPoints.setFilters(qgis.core.QgsMapLayerProxyModel.PointLayer)
+        self.dlg.selectPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+        
         self.dlg.PointAttribut.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.LineAttribut.setLayer(self.dlg.selectLines.currentLayer())
         self.dlg.attributFromPoint.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.attributToPoint.setLayer(self.dlg.selectPoints.currentLayer())
+        
+        self.dlg.selectPoints.layerChanged.connect(self.pointLayerChange)
+        self.dlg.selectLines.layerChanged.connect(self.lineLayerChange)
         self.dlg.DistanceSelect.valueChanged.connect(self.sliderChange) 
 
         # show the dialog
@@ -209,6 +227,130 @@ class SplitLines:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
+            ### remove old layers
+            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
+            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
+            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
+            ### layer for pointbuffer
+            vl = QgsVectorLayer("polygon?crs=epsg:25832", "tempBuffer", "memory")
+            pr = vl.dataProvider()
+            ### linelayer (multi)
+            outLayer = self.dlg.selectLines.currentLayer()
+            ### layer for lines (multi to single)
+            fn2 = self.plugin_dir + "/data/singleLines.shp"
+            layer2 = QgsVectorLayer("linestring?crs=epsg:25832", "singleLines", "memory")
+            layer2PR = layer2.dataProvider()
+            layer2PR.addAttributes(outLayer.fields())
+            layer2.updateFields()
+
+            ### vorher vielleicht noch mergen??? damit zusammenhängende linien mit gleichen attributen auch nur 1 linie ist
+
+            ### mulitLine to singleLine(new layer)
+            for feat2 in outLayer.getFeatures():
+                geom = feat2.geometry()
+                if QgsWkbTypes.isSingleType(geom.wkbType()):
+                    # single
+                    points = []
+                    f = QgsFeature()
+                    for pnt in geom.asPolyline():
+                        points.append(QgsPoint(pnt.x(),pnt.y()))
+                    f.setGeometry(QgsGeometry.fromPolyline(points))
+                    f.setAttributes(feat2.attributes())
+                    layer2PR.addFeature(f)
+                else:
+                    # multipart
+                    for part in geom.asMultiPolyline():
+                        points = []
+                        f = QgsFeature()
+                        for pnt in part:
+                            points.append(QgsPoint(pnt.x(),pnt.y()))
+                        f.setGeometry(QgsGeometry.fromPolyline(points))
+                        f.setAttributes(feat2.attributes())
+                        layer2PR.addFeature(f)
+            QgsProject.instance().addMapLayer(layer2)
+
+            ### new layer for Straight lines (curved to straight)
+            fn3 = self.plugin_dir + "/data/straightLines.shp"
+            layer3 = QgsVectorLayer("linestring?crs=epsg:25832", "straightLines", "memory")
+            layer3PR = layer3.dataProvider()
+            layer3PR.addAttributes(layer2.fields())
+            layer3.updateFields()
+            for feat3 in layer2.getFeatures():
+                geom3 = feat3.geometry()
+                f = QgsFeature()
+                points = []
+                for pnt in geom3.asPolyline():
+                    if points != []:
+                        points.append(QgsPoint(pnt.x(),pnt.y()))
+                        f.setGeometry(QgsGeometry.fromPolyline(points))
+                        f.setAttributes(feat3.attributes())
+                        layer3PR.addFeature(f)
+                        points = []
+                    points.append(QgsPoint(pnt.x(),pnt.y()))
+            QgsProject.instance().addMapLayer(layer3)
+            
+            ### loop through all points
+            for feat in self.dlg.selectPoints.currentLayer().getFeatures():
+            
+                ### select all lines with same attributs as point in given fields (PointAttribut, LineAttribut)
+                print(self.dlg.LineAttribut.currentField() + " = '" +feat[self.dlg.PointAttribut.currentField()] + "'" )
+                layer3.selectByExpression(self.dlg.LineAttribut.currentField()+" = '"+feat[self.dlg.PointAttribut.currentField()]+"'")
+                #self.dlg.selectPoints.currentLayer().selectByExpression(self.dlg.PointAttribut.currentField()+'='+feat[self.dlg.PointAttribut.currentField()])
+                print("Anzahl selektierte Linien nach Attribut", int(layer3.selectedFeatureCount()))                 
+                 
+                ### create buffer around actual point with given distance(DistanceSelect)
+                print("distance: ", self.dlg.DistanceSelect.value())
+                buffer = feat.geometry().buffer(self.dlg.DistanceSelect.value(),10)
+                poly = buffer.asPolygon()
+                outGeom = QgsFeature()
+                outGeom.setGeometry(QgsGeometry.fromPolygonXY(poly))
+                pr.addFeature(outGeom)
+                vl.updateExtents() 
+                QgsProject.instance().addMapLayer(vl)
+                
+                ### subselect lines intersecting the buffer
+                parameters = { 'INPUT' : layer3, 'INTERSECT' : vl, 'METHOD' : 2, 'PREDICATE' : [0] }
+                processing.run('qgis:selectbylocation', parameters )
+                print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
+                if (int(layer3.selectedFeatureCount()) > 1):
+                  raise Exception('The distance is too big')
+                
+                ### get nearest point on line from actual point
+                ## Inputs
+                #line = Line(0.0, 0.0, 100.0, 0.0)
+                print(layer3.selectedFeatures()[0].geometry().asPolyline())
+                line = layer3.selectedFeatures()[0].geometry().asPolyline()
+                #point = Point(50.0, 1500)
+                print(feat.geometry().asPoint())
+                point = feat.geometry().asPoint()
+                ## Calculate Length of line
+                len = math.sqrt((line[0].x() - line[1].x())*(line[0].x() - line[1].x()) + (line[0].y() - line[1].y())*(line[0].y() - line[1].y()))
+                if (len == 0):
+                  raise Exception('The points on input line must not be identical')
+
+                u = ((point.x() - line[1].x()) * (line[0].x() - line[1].x()) + (point.y() - line[1].y()) * (line[0].y() - line[1].y())) / (len*len)
+
+                # restrict to line boundary
+                if u > 1:
+                  u = 1
+                elif u < 0:
+                  u = 0
+
+                nearestPointOnLine = QgsPointXY(line[1].x() + u * (line[0].x() - line[1].x()), line[1].y() + u * (line[0].y() - line[1].y()))
+                print('Nearest point "N" on line: ({}, {})'.format(nearestPointOnLine.x(), nearestPointOnLine.y()))   
+                
+                ###   splitte selektierte linie an punkt
+                #   pt = nearestPointOnLine
+                #   line = self.dlg.selectLines.currentLayer.selectedFeatures().geometry()
+                #   result = split(line, pt)
+                #   result.wkt
+                
+                #   if attribut nicht null ...
+                #   gib Linie mit ID: 1 attribut bis Punkt
+                #   gib Linie mit ID: 2 attribut vom Punkt
+                
+                 
+                #for feat in layer2PR.getFeatures():
+                #    layer2PR.deleteFeature(feat.id())
+                
             pass
