@@ -192,12 +192,51 @@ class SplitLines:
     
     def pointLayerChange(self):
         self.dlg.PointAttribut.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.PointAttribut_2.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.PointAttribut_3.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.attributFromPoint.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.attributToPoint.setLayer(self.dlg.selectPoints.currentLayer())
 
     def lineLayerChange(self):
         self.dlg.LineAttribut.setLayer(self.dlg.selectLines.currentLayer())
+        self.dlg.LineAttribut_2.setLayer(self.dlg.selectLines.currentLayer())
+        self.dlg.LineAttribut_3.setLayer(self.dlg.selectLines.currentLayer())
      
+    def add1Clicked(self):
+        if self.dlg.add_1.text() == '+':
+            self.dlg.LineAttribut_2.setEditable(True)
+            self.dlg.PointAttribut_2.setEditable(True)
+            self.dlg.LineAttribut_2.setHidden(False)
+            self.dlg.PointAttribut_2.setHidden(False)
+            self.dlg.add_1.setText('-')
+            self.dlg.same_2.setHidden(False)
+            self.dlg.add_2.setHidden(False)
+        elif self.dlg.add_1.text() == '-':
+            self.dlg.LineAttribut_2.setEditable(False)
+            self.dlg.PointAttribut_2.setEditable(False)
+            self.dlg.LineAttribut_2.setHidden(True)
+            self.dlg.PointAttribut_2.setHidden(True)
+            self.dlg.add_1.setText('+')
+            self.dlg.same_2.setHidden(True)
+            self.dlg.add_2.setHidden(True)
+     
+    def add2Clicked(self):
+        if self.dlg.add_2.text() == '+':
+            self.dlg.LineAttribut_3.setEditable(True)
+            self.dlg.PointAttribut_3.setEditable(True)
+            self.dlg.LineAttribut_3.setHidden(False)
+            self.dlg.PointAttribut_3.setHidden(False)
+            self.dlg.add_2.setText('-')
+            self.dlg.same_3.setHidden(False)
+        elif self.dlg.add_2.text() == '-':
+            self.dlg.LineAttribut_3.setEditable(False)
+            self.dlg.PointAttribut_3.setEditable(False)
+            self.dlg.LineAttribut_3.setHidden(True)
+            self.dlg.PointAttribut_3.setHidden(True)
+            self.dlg.add_2.setText('+')
+            self.dlg.same_3.setHidden(True)
+        
+    
     def run(self):
         """Run method that performs all the real work"""
 
@@ -211,15 +250,33 @@ class SplitLines:
         self.dlg.selectLines.setFilters(QgsMapLayerProxyModel.LineLayer)
         self.dlg.selectPoints.setShowCrs(True)
         self.dlg.selectPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.dlg.LineAttribut_2.setEditable(False)
+        self.dlg.PointAttribut_2.setEditable(False)
+        self.dlg.LineAttribut_3.setEditable(False)
+        self.dlg.PointAttribut_3.setEditable(False)
+        self.dlg.same_2.setHidden(True)
+        self.dlg.same_3.setHidden(True)
+        self.dlg.add_2.setHidden(True)
+        self.dlg.LineAttribut_2.setHidden(True)
+        self.dlg.PointAttribut_2.setHidden(True)
+        self.dlg.LineAttribut_3.setHidden(True)
+        self.dlg.PointAttribut_3.setHidden(True)
         
         self.dlg.PointAttribut.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.LineAttribut.setLayer(self.dlg.selectLines.currentLayer())
+        self.dlg.PointAttribut_2.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.LineAttribut_2.setLayer(self.dlg.selectLines.currentLayer())
+        self.dlg.PointAttribut_3.setLayer(self.dlg.selectPoints.currentLayer())
+        self.dlg.LineAttribut_3.setLayer(self.dlg.selectLines.currentLayer())
         self.dlg.attributFromPoint.setLayer(self.dlg.selectPoints.currentLayer())
         self.dlg.attributToPoint.setLayer(self.dlg.selectPoints.currentLayer())
         
         self.dlg.selectPoints.layerChanged.connect(self.pointLayerChange)
         self.dlg.selectLines.layerChanged.connect(self.lineLayerChange)
         self.dlg.DistanceSelect.valueChanged.connect(self.sliderChange) 
+        
+        self.dlg.add_1.clicked.connect(self.add1Clicked)
+        self.dlg.add_2.clicked.connect(self.add2Clicked)
 
         # show the dialog
         self.dlg.show()
@@ -231,9 +288,13 @@ class SplitLines:
             QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
             QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
             QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
+            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
             ### layer for pointbuffer
             vl = QgsVectorLayer("polygon?crs=epsg:25832", "tempBuffer", "memory")
             pr = vl.dataProvider()
+            ### layer for nearestPoint
+            vlN = QgsVectorLayer("point?crs=epsg:25832", "nearestPoint", "memory")
+            prN = vlN.dataProvider()
             ### linelayer (multi)
             outLayer = self.dlg.selectLines.currentLayer()
             ### layer for lines (multi to single)
@@ -293,9 +354,16 @@ class SplitLines:
             for feat in self.dlg.selectPoints.currentLayer().getFeatures():
             
                 ### select all lines with same attributs as point in given fields (PointAttribut, LineAttribut)
-                print(self.dlg.LineAttribut.currentField() + " = '" +feat[self.dlg.PointAttribut.currentField()] + "'" )
-                layer3.selectByExpression(self.dlg.LineAttribut.currentField()+" = '"+feat[self.dlg.PointAttribut.currentField()]+"'")
+                exp = self.dlg.LineAttribut.currentField()+" = '"+feat[self.dlg.PointAttribut.currentField()]+"'"
+                if self.dlg.add_1.text() == '-':
+                    exp = exp + " AND " + self.dlg.LineAttribut_2.currentField()+" = '"+feat[self.dlg.PointAttribut_2.currentField()]+"'"
+                if self.dlg.add_2.text() == '-':
+                    exp = exp + " AND " + self.dlg.LineAttribut_3.currentField()+" = '"+feat[self.dlg.PointAttribut_3.currentField()]+"'"
+                print(exp)
+                layer2.selectByExpression(exp)
+                layer3.selectByExpression(exp)
                 #self.dlg.selectPoints.currentLayer().selectByExpression(self.dlg.PointAttribut.currentField()+'='+feat[self.dlg.PointAttribut.currentField()])
+                print("Anzahl selektierte Linien von Layer 2 nach Location", int(layer2.selectedFeatureCount()))
                 print("Anzahl selektierte Linien nach Attribut", int(layer3.selectedFeatureCount()))                 
                  
                 ### create buffer around actual point with given distance(DistanceSelect)
@@ -337,20 +405,25 @@ class SplitLines:
                   u = 0
 
                 nearestPointOnLine = QgsPointXY(line[1].x() + u * (line[0].x() - line[1].x()), line[1].y() + u * (line[0].y() - line[1].y()))
-                print('Nearest point "N" on line: ({}, {})'.format(nearestPointOnLine.x(), nearestPointOnLine.y()))   
+                print('Nearest point "N" on line: ({}, {})'.format(nearestPointOnLine.x(), nearestPointOnLine.y()))
+                fN = QgsFeature()
+                fN.setGeometry(QgsGeometry.fromPointXY(nearestPointOnLine))
+                prN.addFeature(fN)
+                QgsProject.instance().addMapLayer(vlN)
+                
+                ### subselect lines intersecting the point
+                parameters = { 'INPUT' : layer2, 'INTERSECT' : vlN, 'METHOD' : 2, 'PREDICATE' : [0] }
+                processing.run('qgis:selectbylocation', parameters )
+                print("Anzahl selektierte Linien von Layer 2 nach Location", int(layer2.selectedFeatureCount()))
                 
                 ###   splitte selektierte linie an punkt
-                #   pt = nearestPointOnLine
-                #   line = self.dlg.selectLines.currentLayer.selectedFeatures().geometry()
-                #   result = split(line, pt)
-                #   result.wkt
+                #splitPt = nearestPointOnLine
+                #splitLine = layer2.selectedFeatures()[0].geometry()
+                #splitResult = split(splitLine, splitPt)
+                #splitResult.wkt
                 
                 #   if attribut nicht null ...
                 #   gib Linie mit ID: 1 attribut bis Punkt
                 #   gib Linie mit ID: 2 attribut vom Punkt
-                
-                 
-                #for feat in layer2PR.getFeatures():
-                #    layer2PR.deleteFeature(feat.id())
                 
             pass
