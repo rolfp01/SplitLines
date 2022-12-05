@@ -209,23 +209,29 @@ class SplitLines:
         return result
     
     def mergeLines(self):
-        layer = self.dlg.selectLines.currentLayer()
-        fields = []
-        fields.append(QgsField('ID', QVariant.String))
-        layer.dataProvider().addAttributes(fields)
+        baselayer = self.dlg.selectLines.currentLayer()
+        layer = QgsVectorLayer("multilinestring?crs=epsg:25832", "tempMergeLines", "memory")
+        layerPR = layer.dataProvider()
+        fieldsL = baselayer.fields()
+        fieldsL.append(QgsField('plID', QVariant.String))
+        layerPR.addAttributes(fieldsL)
         layer.updateFields()
-        
-                
-        with edit(layer):  
-            for feature in layer.getFeatures():
-                variables = feature[self.dlg.LineAttribut.currentField()] + ""
-                if self.dlg.add_1.text() == '-':
-                    variables = variables + ": " + feature[self.dlg.LineAttribut_2.currentField()]
-                if self.dlg.add_2.text() == '-':
-                    variables = variables + ": " + feature[self.dlg.LineAttribut_3.currentField()]
-                feature.setAttribute(feature.fieldNameIndex('ID'), variables)
-                
         crs = layer.crs().toWkt()
+
+        with edit(layer): 
+            for feat in baselayer.getFeatures():
+                attr = feat.attributes()
+                variables = str(feat[self.dlg.LineAttribut.currentField()]) + ""
+                if self.dlg.add_1.text() == '-':
+                    variables = variables + ": " + feat[self.dlg.LineAttribut_2.currentField()]
+                if self.dlg.add_2.text() == '-':
+                    variables = variables + ": " + feat[self.dlg.LineAttribut_3.currentField()]
+                attr.append(variables)
+                outFeat = QgsFeature()
+                outFeat.setGeometry(feat.geometry())
+                outFeat.setAttributes(attr)
+                layerPR.addFeatures([outFeat])
+        QgsProject.instance().addMapLayer(layer)    
 
         # Create the output layer
         outMergedLayer = QgsVectorLayer('Linestring?crs='+ crs, 'mergedLines' , 'memory')
@@ -233,14 +239,14 @@ class SplitLines:
         fields = layer.fields()
         prov.addAttributes(fields)
         outMergedLayer.updateFields()
-
+        
         already_processed = []
         for feat in layer.getFeatures():
             attrs = feat.attributes()
             geom = feat.geometry()
-            curr_id = feat["ID"]
+            curr_id = feat["plID"]
             if curr_id not in already_processed:
-                query = '"ID" = %s' % (curr_id)
+                query = '"plID" = ' + curr_id
                 selection = layer.getFeatures(QgsFeatureRequest().setFilterExpression(query))
                 self.selected_ids = [k.geometry().asPolyline() for k in selection]
                 adjacent_feats = self.find_adjacent()
@@ -373,7 +379,8 @@ class SplitLines:
             #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
             #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
             #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
-            ##QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('mergedLines')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('mergedLines')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempMergeLines')[0].id())
             #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNP')[0].id())
             #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
             ### layer for pointbuffer
@@ -388,7 +395,8 @@ class SplitLines:
             vlN = QgsVectorLayer("point?crs=epsg:25832", "nearestPoint", "memory")
             prN = vlN.dataProvider()
             ### linelayer (multi)
-            #outLayerTest = self.mergeLines()
+            outLayerTest = self.mergeLines()
+            pass
             outLayer = self.dlg.selectLines.currentLayer()
             ### layer for lines (multi to single)
             layer2 = QgsVectorLayer("linestring?crs=epsg:25832", "singleLines", "memory")
