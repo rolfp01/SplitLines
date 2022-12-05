@@ -36,6 +36,7 @@ import math
 import processing
 # from qgis.core import QgsVectorLayer, QgsVectorFileWriter, QgsFeature, QgsGeometry, QgsProject, QgsField
 import shapely.ops
+from shapely.wkt import loads
 from shapely.geometry import LineString
 
 
@@ -186,6 +187,84 @@ class SplitLines:
                 action)
             self.iface.removeToolBarIcon(action)
 
+    def find_adjacent(self): # for finding adjacent features
+        selected_ids = self.selected_ids
+        outlist = []
+        outinds = []
+        outset = set()
+        for j, l in enumerate(selected_ids):
+            as_set = set(l)
+            inds = []
+            for k in outset.copy():
+                if outlist[k] & as_set:
+                    outset.remove(k)
+                    as_set |= outlist[k]
+                    inds.extend(outinds[k])
+            outset.add(j)
+            outlist.append(as_set)
+            outinds.append(inds + [j])
+        outinds = [outinds[j] for j in outset]
+        del outset, outlist
+        result = [[selected_ids[j] for j in k] for k in outinds]
+        return result
+    
+    def mergeLines(self):
+        layer = self.dlg.selectLines.currentLayer()
+        fields = []
+        fields.append(QgsField('ID', QVariant.String))
+        layer.dataProvider().addAttributes(fields)
+        layer.updateFields()
+        
+                
+        with edit(layer):  
+            for feature in layer.getFeatures():
+                variables = feature[self.dlg.LineAttribut.currentField()] + ""
+                if self.dlg.add_1.text() == '-':
+                    variables = variables + ": " + feature[self.dlg.LineAttribut_2.currentField()]
+                if self.dlg.add_2.text() == '-':
+                    variables = variables + ": " + feature[self.dlg.LineAttribut_3.currentField()]
+                feature.setAttribute(feature.fieldNameIndex('ID'), variables)
+                
+        crs = layer.crs().toWkt()
+
+        # Create the output layer
+        outMergedLayer = QgsVectorLayer('Linestring?crs='+ crs, 'mergedLines' , 'memory')
+        prov = outMergedLayer.dataProvider()
+        fields = layer.fields()
+        prov.addAttributes(fields)
+        outMergedLayer.updateFields()
+
+        already_processed = []
+        for feat in layer.getFeatures():
+            attrs = feat.attributes()
+            geom = feat.geometry()
+            curr_id = feat["ID"]
+            if curr_id not in already_processed:
+                query = '"ID" = %s' % (curr_id)
+                selection = layer.getFeatures(QgsFeatureRequest().setFilterExpression(query))
+                self.selected_ids = [k.geometry().asPolyline() for k in selection]
+                adjacent_feats = self.find_adjacent()
+                for f in adjacent_feats:
+                    first = True
+                    for x in xrange(0, len(f)):
+                        geom = (QgsGeometry.fromPolyline([QgsPoint(w) for w in f[x]]))
+                        if first:
+                            outFeat = QgsFeature()
+                            outFeat.setGeometry(geom)
+                            outGeom = outFeat.geometry()
+                            first = False
+                        else:
+                            outGeom = outGeom.combine(geom)
+                    outFeat.setAttributes(attrs)
+                    outFeat.setGeometry(outGeom)
+                    prov.addFeatures([outFeat])
+                already_processed.append(curr_id)
+            else:
+                continue
+
+        # Add the layer to the Layers panel
+        QgsProject.instance().addMapLayer(outMergedLayer)
+        return outMergedLayer
 
     def sliderChange(self):
         self.dlg.selectedDistance.display(self.dlg.DistanceSelect.value())
@@ -246,6 +325,7 @@ class SplitLines:
             self.first_start = False
             self.dlg = SplitLinesDialog()
         
+        self.dlg.add_1.setText('+')
         self.dlg.selectLines.setShowCrs(True)
         self.dlg.selectLines.setFilters(QgsMapLayerProxyModel.LineLayer)
         self.dlg.selectPoints.setShowCrs(True)
@@ -285,28 +365,43 @@ class SplitLines:
         # See if OK was pressed
         if result:
             ### remove old layers
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
+            #QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.shp")
+            #QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.dbf")
+            #QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.prj")
+            #QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.shx")
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
+            ##QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('mergedLines')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNP')[0].id())
+            #QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
             ### layer for pointbuffer
             vl = QgsVectorLayer("polygon?crs=epsg:25832", "tempBuffer", "memory")
             pr = vl.dataProvider()
+            ### layer for pointbuffer (nearestPoint)
+            vlbufferNP = QgsVectorLayer("polygon?crs=epsg:25832", "tempBufferNP", "memory")
+            prbufferNP = vlbufferNP.dataProvider()
+            ### layer for linien in nearestPointbuffer
+            fn2 = self.plugin_dir + "/data/tempBufferNPlines.shp"
             ### layer for nearestPoint
             vlN = QgsVectorLayer("point?crs=epsg:25832", "nearestPoint", "memory")
             prN = vlN.dataProvider()
             ### linelayer (multi)
+            #outLayerTest = self.mergeLines()
             outLayer = self.dlg.selectLines.currentLayer()
             ### layer for lines (multi to single)
-            fn2 = self.plugin_dir + "/data/singleLines.shp"
             layer2 = QgsVectorLayer("linestring?crs=epsg:25832", "singleLines", "memory")
             layer2PR = layer2.dataProvider()
-            layer2PR.addAttributes(outLayer.fields())
+            fieldsL2 = outLayer.fields()
+            fieldsL2.append(QgsField('spPlugID', QVariant.Int))
+            layer2PR.addAttributes(fieldsL2)
             layer2.updateFields()
 
             ### vorher vielleicht noch mergen??? damit zusammenhängende linien mit gleichen attributen auch nur 1 linie ist
 
             ### mulitLine to singleLine(new layer)
+            i=0
             for feat2 in outLayer.getFeatures():
                 geom = feat2.geometry()
                 if QgsWkbTypes.isSingleType(geom.wkbType()):
@@ -316,7 +411,9 @@ class SplitLines:
                     for pnt in geom.asPolyline():
                         points.append(QgsPoint(pnt.x(),pnt.y()))
                     f.setGeometry(QgsGeometry.fromPolyline(points))
-                    f.setAttributes(feat2.attributes())
+                    attributesL2 = feat2.attributes()
+                    attributesL2.append(i)
+                    f.setAttributes(attributesL2)
                     layer2PR.addFeature(f)
                 else:
                     # multipart
@@ -326,10 +423,13 @@ class SplitLines:
                         for pnt in part:
                             points.append(QgsPoint(pnt.x(),pnt.y()))
                         f.setGeometry(QgsGeometry.fromPolyline(points))
-                        f.setAttributes(feat2.attributes())
+                        attributesL2 = feat2.attributes()
+                        attributesL2.append(i)
+                        f.setAttributes(attributesL2)
                         layer2PR.addFeature(f)
+                i +=1
             QgsProject.instance().addMapLayer(layer2)
-
+            
             ### new layer for Straight lines (curved to straight)
             fn3 = self.plugin_dir + "/data/straightLines.shp"
             layer3 = QgsVectorLayer("linestring?crs=epsg:25832", "straightLines", "memory")
@@ -411,16 +511,46 @@ class SplitLines:
                 prN.addFeature(fN)
                 QgsProject.instance().addMapLayer(vlN)
                 
-                ### subselect lines intersecting the point
-                parameters = { 'INPUT' : layer2, 'INTERSECT' : vlN, 'METHOD' : 2, 'PREDICATE' : [0] }
-                processing.run('qgis:selectbylocation', parameters )
-                print("Anzahl selektierte Linien von Layer 2 nach Location", int(layer2.selectedFeatureCount()))
+                ### create buffer around nearest point
+                i = 0
+                for featNP in vlN.getFeatures():
+                    if i == 0:
+                        bufferNP = featNP.geometry().buffer(0.001,10)
+                        polyNP = bufferNP.asPolygon()
+                        outGeomNP = QgsFeature()
+                        outGeomNP.setGeometry(QgsGeometry.fromPolygonXY(polyNP))
+                        prbufferNP.addFeature(outGeomNP)
+                        vlbufferNP.updateExtents() 
+                        QgsProject.instance().addMapLayer(vlbufferNP)
+                        i = 1
+                    else:
+                        print(" mehrere Nearest points erzeugt")
                 
-                ###   splitte selektierte linie an punkt
-                #splitPt = nearestPointOnLine
-                #splitLine = layer2.selectedFeatures()[0].geometry()
-                #splitResult = split(splitLine, splitPt)
-                #splitResult.wkt
+                ### cut lines on buffer
+                processing.run("qgis:clip", {'INPUT':layer2, 'OVERLAY':vlbufferNP, 'OUTPUT': fn2})
+                vllinesNP = QgsVectorLayer(fn2, "tempBufferNPlines", "ogr")
+                prlinesNP = vllinesNP.dataProvider()
+                QgsProject.instance().addMapLayer(vllinesNP)
+                tempLine = -1
+                maximalLength = -1
+                for feat in vllinesNP.getFeatures():
+                    if feat.geometry().length() > maximalLength:
+                        maximalLength = feat.geometry().length()
+                        tempLine = feat.attribute("spPlugID")
+                
+                ###  splitte selektierte linie an punkt
+                layer2.selectByExpression("spPlugID = " + str(tempLine))
+                print("Anzahl selektierte Linien von Layer 2 nach Location", int(layer2.selectedFeatureCount()))
+                for lineFeat in layer2.getSelectedFeatures():
+                    for pointFeat in vlN.getFeatures():
+                        l = shapely.wkt.loads(lineFeat.geometry().asWkt())
+                        p = shapely.wkt.loads(pointFeat.geometry().asWkt())
+                        print(l)
+                        print(p)
+                        splitResult = shapely.ops.split(l, p)
+                        print(splitResult.wkt)
+                        break
+                    break
                 
                 #   if attribut nicht null ...
                 #   gib Linie mit ID: 1 attribut bis Punkt
