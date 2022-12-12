@@ -406,14 +406,22 @@ class SplitLines:
             QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.dbf")
             QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.prj")
             QgsVectorFileWriter.deleteShapeFile(self.plugin_dir + "/data/tempBufferNPlines.shx")
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('mergedLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempMergeLines')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNP')[0].id())
-            QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('straightLines')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('singleLines')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('tempBuffer')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBuffer')[0].id())
+            if len(QgsProject.instance().mapLayersByName('nearestPoint')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('nearestPoint')[0].id())
+            if len(QgsProject.instance().mapLayersByName('mergedLines')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('mergedLines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('tempMergeLines')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempMergeLines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('tempBufferNP')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNP')[0].id())
+            if len(QgsProject.instance().mapLayersByName('tempBufferNPlines')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
             ### layer for pointbuffer
             vl = QgsVectorLayer("polygon?crs=epsg:25832", "tempBuffer", "memory")
             pr = vl.dataProvider()
@@ -433,10 +441,9 @@ class SplitLines:
             layer2PR = layer2.dataProvider()
             fieldsL2 = outLayer.fields()
             fieldsL2.append(QgsField('spPlugID', QVariant.Int))
+            fieldsL2.append(QgsField('newAttribute', QVariant.String))
             layer2PR.addAttributes(fieldsL2)
             layer2.updateFields()
-
-            ### vorher vielleicht noch mergen??? damit zusammenhängende linien mit gleichen attributen auch nur 1 linie ist
 
             ### mulitLine to singleLine(new layer)
             i=0
@@ -515,11 +522,11 @@ class SplitLines:
                 ### subselect lines intersecting the buffer
                 parameters = { 'INPUT' : layer3, 'INTERSECT' : vl, 'METHOD' : 2, 'PREDICATE' : [0] }
                 processing.run('qgis:selectbylocation', parameters )
-                print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
+                #print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
                 i=1
                 while (int(layer3.selectedFeatureCount()) > 1):
                     with edit(vl):
-                        listOfIds = [feat.id() for feat in vl.getFeatures()]
+                        listOfIds = [featID.id() for featID in vl.getFeatures()]
                         vl.deleteFeatures( listOfIds )
                     buffer = feat.geometry().buffer((self.dlg.DistanceSelect.value()-i),10)
                     poly = buffer.asPolygon()
@@ -528,19 +535,20 @@ class SplitLines:
                     pr.addFeature(outGeom)
                     parameters = { 'INPUT' : layer3, 'INTERSECT' : vl, 'METHOD' : 2, 'PREDICATE' : [0] }
                     processing.run('qgis:selectbylocation', parameters )
-                    print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
+                    #print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
                     i += 1
                 
+                print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
                 ### get nearest point on line from actual point
                 ## Inputs
                 line = layer3.selectedFeatures()[0].geometry().asPolyline()
                 point = feat.geometry().asPoint()
                 ## Calculate Length of line
-                len = math.sqrt((line[0].x() - line[1].x())*(line[0].x() - line[1].x()) + (line[0].y() - line[1].y())*(line[0].y() - line[1].y()))
-                if (len == 0):
+                myLength = math.sqrt((line[0].x() - line[1].x())*(line[0].x() - line[1].x()) + (line[0].y() - line[1].y())*(line[0].y() - line[1].y()))
+                if (myLength == 0):
                   raise Exception('The points on input line must not be identical')
 
-                u = ((point.x() - line[1].x()) * (line[0].x() - line[1].x()) + (point.y() - line[1].y()) * (line[0].y() - line[1].y())) / (len*len)
+                u = ((point.x() - line[1].x()) * (line[0].x() - line[1].x()) + (point.y() - line[1].y()) * (line[0].y() - line[1].y())) / (myLength*myLength)
 
                 # restrict to line boundary
                 if u > 1:
@@ -577,10 +585,10 @@ class SplitLines:
                 QgsProject.instance().addMapLayer(vllinesNP)
                 tempLine = -1
                 maximalLength = -1
-                for feat in vllinesNP.getFeatures():
-                    if feat.geometry().length() > maximalLength:
-                        maximalLength = feat.geometry().length()
-                        tempLine = feat.attribute("spPlugID")
+                for featLNP in vllinesNP.getFeatures():
+                    if featLNP.geometry().length() > maximalLength:
+                        maximalLength = featLNP.geometry().length()
+                        tempLine = featLNP.attribute("spPlugID")
                 
                 ###  splitte selektierte linie an punkt
                 layer2.selectByExpression("spPlugID = " + str(tempLine))
@@ -589,14 +597,15 @@ class SplitLines:
                     for pointFeat in vlN.getFeatures():
                         l = shapely.wkt.loads(lineFeat.geometry().asWkt())
                         p = shapely.wkt.loads(pointFeat.geometry().asWkt())
-                        #print(l)
-                        #print(p)
-                        splitResult = shapely.ops.split(l, p)
-                        print(splitResult.wkt)
+                        endBufferNP = pointFeat.geometry().buffer(0.000001,10)
+                        poly = shapely.wkt.loads(endBufferNP.asWkt())
+                        splitResult = shapely.ops.split(l, poly)
+                        print(splitResult)
                         break
                     break
-                
-                #   if attribut nicht null ...
+                    
+                #self.dlg.attributFromPoint
+                #self.dlg.attributToPoint
                 #   gib Linie mit ID: 1 attribut bis Punkt
                 #   gib Linie mit ID: 2 attribut vom Punkt
                 

@@ -224,6 +224,9 @@
      <height>21</height>
     </rect>
    </property>
+   <property name="maxVisibleItems">
+    <number>30</number>
+   </property>
   </widget>
   <widget class="QgsFieldComboBox" name="attributFromPoint">
    <property name="geometry">
@@ -233,6 +236,9 @@
      <width>231</width>
      <height>21</height>
     </rect>
+   </property>
+   <property name="maxVisibleItems">
+    <number>30</number>
    </property>
   </widget>
   <widget class="QLabel" name="label_8">
