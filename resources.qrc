@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/plugins/SplitLines" >
-        <file>icon.png</file>
+        <file>search.png</file>
     </qresource>
 </RCC>

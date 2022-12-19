@@ -38,6 +38,8 @@ import processing
 import shapely.ops
 from shapely.wkt import loads
 from shapely.geometry import LineString
+import qgis
+from qgis.PyQt.QtWidgets import QDockWidget
 
 
 class SplitLines:
@@ -388,9 +390,14 @@ class SplitLines:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
+            pythonConsole = qgis.utils.iface.mainWindow().findChild(QDockWidget, 'PythonConsole')
+            if not pythonConsole or not pythonConsole.isVisible():
+                qgis.utils.iface.actionShowPythonDialog().trigger()
+            consoleWidget = qgis.utils.iface.mainWindow().findChild( QDockWidget, 'PythonConsole' )
+            consoleWidget.console.shellOut.clearConsole()
             ### remove old layers
-            if len(QgsProject.instance().mapLayersByName('singleLines')) != 0:
-                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('singleLines')[0].id())
+            if len(QgsProject.instance().mapLayersByName('result')) != 0:
+                QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('result')[0].id())
             ### layer for pointbuffer
             vl = QgsVectorLayer("polygon?crs=epsg:25832", "tempBuffer", "memory")
             pr = vl.dataProvider()
@@ -407,11 +414,11 @@ class SplitLines:
             proutlayer = outLayer.dataProvider()
             fieldsOL = outLayer.fields()
             fieldsOL.append(QgsField('spPlugID', QVariant.Int))
-            fieldsOL.append(QgsField('newAttribute', QVariant.String))
+            fieldsOL.append(QgsField(self.dlg.newAttributeName.text(), QVariant.String))
             proutlayer.addAttributes(fieldsOL)
             outLayer.updateFields()
             ### layer for lines (multi to single)
-            layer2 = QgsVectorLayer("linestring?crs=epsg:25832", "singleLines", "memory")
+            layer2 = QgsVectorLayer("linestring?crs=epsg:25832", "result", "memory")
             layer2PR = layer2.dataProvider()
             fieldsL2 = outLayer.fields()
             layer2PR.addAttributes(fieldsL2)
@@ -595,14 +602,14 @@ class SplitLines:
                         finalGeom1.setAttributes(lineFeat.attributes())
                         finalGeom.setAttributes(lineFeat.attributes())
                         
-                        if lineFeat.attribute('newAttribute') == NULL:
-                            finalGeom1.setAttribute(lineFeat.fieldNameIndex('newAttribute'), feat.attribute(self.dlg.attributToPoint.currentField()))
-                            finalGeom.setAttribute(lineFeat.fieldNameIndex('newAttribute'), feat.attribute(self.dlg.attributFromPoint.currentField()))
+                        if lineFeat.attribute(self.dlg.newAttributeName.text()) == NULL:
+                            finalGeom1.setAttribute(lineFeat.fieldNameIndex(self.dlg.newAttributeName.text()), feat.attribute(self.dlg.attributToPoint.currentField()))
+                            finalGeom.setAttribute(lineFeat.fieldNameIndex(self.dlg.newAttributeName.text()), feat.attribute(self.dlg.attributFromPoint.currentField()))
                         else:
                             if (feat.attribute(self.dlg.attributToPoint.currentField()) != NULL):
-                                finalGeom1.setAttribute(lineFeat.fieldNameIndex('newAttribute'), feat.attribute(self.dlg.attributToPoint.currentField()))
+                                finalGeom1.setAttribute(lineFeat.fieldNameIndex(self.dlg.newAttributeName.text()), feat.attribute(self.dlg.attributToPoint.currentField()))
                             if (feat.attribute(self.dlg.attributFromPoint.currentField()) != NULL):
-                                finalGeom.setAttribute(lineFeat.fieldNameIndex('newAttribute'), feat.attribute(self.dlg.attributFromPoint.currentField()))
+                                finalGeom.setAttribute(lineFeat.fieldNameIndex(self.dlg.newAttributeName.text()), feat.attribute(self.dlg.attributFromPoint.currentField()))
                         
                         layer2PR.deleteFeatures([lineFeat.id()])
                         layer2PR.addFeature(finalGeom)
@@ -647,6 +654,6 @@ class SplitLines:
                 QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
             if len(QgsProject.instance().mapLayersByName('straightLines')) != 0:
                 QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
-
+            print("--------------FINISHED Splitting Lines--------------")
 
             pass
