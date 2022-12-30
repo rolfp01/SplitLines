@@ -547,7 +547,7 @@ class SplitLines:
                     prN.addFeature(fN)
                     QgsProject.instance().addMapLayer(vlN)
                     
-                    ### create buffer around nearest point
+                    ### create buffer around nearest point for nearest line
                     i = 0
                     for featNP in vlN.getFeatures():
                         if i == 0:
@@ -562,7 +562,7 @@ class SplitLines:
                         else:
                             print(" mehrere Nearest points erzeugt")
                     
-                    ### cut lines on buffer
+                    ### cut lines on buffer for nearest line
                     processing.run("qgis:clip", {'INPUT':self.layer2, 'OVERLAY':vlbufferNP, 'OUTPUT': fn2})
                     vllinesNP = QgsVectorLayer(fn2, "tempBufferNPlines", "ogr")
                     prlinesNP = vllinesNP.dataProvider()
