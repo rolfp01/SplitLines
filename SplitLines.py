@@ -514,14 +514,14 @@ class SplitLines:
                     pr.addFeature(outGeom)
                     parameters = { 'INPUT' : layer3, 'INTERSECT' : vl, 'METHOD' : 2, 'PREDICATE' : [0] }
                     processing.run('qgis:selectbylocation', parameters )
-                    #print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
+                    ##print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
                     if i < (self.dlg.DistanceSelect.value()-1):
                         i += 1
                     else:
                         i += 0.01
                     
                     
-                #print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
+                ##print("Anzahl selektierte Linien nach Location", int(layer3.selectedFeatureCount()))
                 if (int(layer3.selectedFeatureCount()) > 0):
                     ### get nearest point on line from actual point
                     ## Inputs
@@ -541,7 +541,7 @@ class SplitLines:
                       u = 0
 
                     nearestPointOnLine = QgsPointXY(line[1].x() + u * (line[0].x() - line[1].x()), line[1].y() + u * (line[0].y() - line[1].y()))
-                    #print('Nearest point "N" on line: ({}, {})'.format(nearestPointOnLine.x(), nearestPointOnLine.y()))
+                    ##print('Nearest point "N" on line: ({}, {})'.format(nearestPointOnLine.x(), nearestPointOnLine.y()))
                     fN = QgsFeature()
                     fN.setGeometry(QgsGeometry.fromPointXY(nearestPointOnLine))
                     prN.addFeature(fN)
@@ -576,7 +576,10 @@ class SplitLines:
                     
                     ###  splitte selektierte linie an punkt
                     self.layer2.selectByExpression("spPlugID = " + str(tempLine))
-                    #print("Anzahl Linien am Nearest Point: ", int(layer2.selectedFeatureCount()))
+                    ##print("Anzahl Linien am Nearest Point: ", int(self.layer2.selectedFeatureCount()))
+                    parameters = { 'INPUT' : self.layer2, 'INTERSECT' : vlbufferNP, 'METHOD' : 2, 'PREDICATE' : [0] }
+                    processing.run('qgis:selectbylocation', parameters )
+                    ##print("Anzahl Linien am Nearest Point: ", int(self.layer2.selectedFeatureCount()))
                     for lineFeat in self.layer2.getSelectedFeatures():
                         for pointFeat in vlN.getFeatures():
                             l = shapely.wkt.loads(lineFeat.geometry().asWkt())
@@ -584,7 +587,7 @@ class SplitLines:
                             endBufferNP = pointFeat.geometry().buffer(0.000001,10)
                             poly = shapely.wkt.loads(endBufferNP.asWkt())
                             splitResult = shapely.ops.split(l, poly)
-                            #print(splitResult)
+                            ##print(splitResult)
                             i = 0
                             mergedLinePoints = []
                             firstLinePoints = []
@@ -618,7 +621,6 @@ class SplitLines:
                         self.layer2PR.addFeature(finalGeom)
                         self.layer2PR.addFeature(finalGeom1)
                         break
-                    
                     listOfIds = [delFeat.id() for delFeat in vlbufferNP.getFeatures()]
                     prbufferNP.deleteFeatures( listOfIds )
                     listOfIds = [delFeat.id() for delFeat in vlN.getFeatures()]
@@ -633,7 +635,6 @@ class SplitLines:
                 self.layer2.selectByExpression("1=0")
                 layer3.selectByExpression("1=0")
                           
-                
                 
                 ### remove used layers
                 if len(QgsProject.instance().mapLayersByName('tempBufferNPlines')) != 0:
@@ -657,6 +658,7 @@ class SplitLines:
                 QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('tempBufferNPlines')[0].id())
             if len(QgsProject.instance().mapLayersByName('straightLines')) != 0:
                 QgsProject.instance().removeMapLayer(QgsProject.instance().mapLayersByName('straightLines')[0].id())
+                
             print("--------------FINISHED Splitting Lines--------------")
 
             pass
